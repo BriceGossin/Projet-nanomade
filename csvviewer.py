@@ -1,6 +1,7 @@
 import sys
 import os
 import csv
+from datetime import datetime
 from PySide6.QtWidgets import *
 from PySide6.QtCore import Qt
 
@@ -122,96 +123,117 @@ class CSVViewer(QWidget):
 
     
     def load_csv(self, filename):
-        """Charge le contenu du CSV dans la table avec des colonnes ajustées."""
+        """Charge le CSV et segmente en séries de données correctement, avec date/heure dans les titres."""
         self.current_file = filename
         self.series_dropdown.clear()
         self.series_data = []
+        self.global_headers = []  # Stocker les en-têtes du CSV
 
         try:
             with open(filename, newline='', encoding='utf-8') as file:
                 reader = csv.reader(file)
                 data = list(reader)
 
-                # Ajoute l'option "Fichier entier" dans le menu déroulant
+                if not data:
+                    return
+
+                # Stocker la première ligne comme en-têtes
+                self.global_headers = data[0]  
+                data = data[1:]  # Supprimer la première ligne des données
+
                 self.series_dropdown.addItem("Fichier entier")
+                self.series_data.append(data)
 
-                # Détection des séries en cherchant les lignes de calibration
                 current_series = []
-                previous_row = None  # Variable pour garder la ligne précédente
-                 # Liste des en-têtes à ignorer (basée sur les noms des colonnes)
-                headers = ["Timestamp", "M_F_1", "M_F_2", "M_F_3", "M_F_4", "M_F_5", "M_F_6", "M_F_7", "M_F_8", 
-                       "U_F_1", "U_F_2", "U_F_3", "U_F_4", "U_F_5", "U_F_6", "U_F_7", "U_F_8", 
-                       "M_C_1", "M_C_2", "M_C_3", "M_C_4", "M_C_5", "M_C_6", "M_C_7", "M_C_8", 
-                       "U_C_1", "U_C_2", "U_C_3", "U_C_4", "U_C_5", "U_C_6", "U_C_7", "U_C_8"]
-                for row in data:
-                    # Ignore les lignes d'en-têtes (lignes avec les noms des colonnes)
-                    if row and row[0] in headers:
-                        continue
+                collecting = False
+                series_titles = []
 
-                    # Si une ligne contient des mots-clés 'ADC', 'GAIN', etc. et qu'il y a une ligne précédente (calibration)
-                    if len(row) > 4 and any(val.isalpha() for val in row[1:5]):  # Vérifie si c'est une ligne de texte
-                        # Si une série est déjà en cours et que la ligne contient des données de calibration
-                        if previous_row:  # Ajouter la ligne de calibration à la série
-                            current_series.insert(0, previous_row)  # Ajouter au début de la série
-                        if current_series:
-                            self.series_data.append(current_series)
-                        current_series = []
+                for i, row in enumerate(data):
+                    if not row:
+                        continue  
 
-                    current_series.append(row)
-                    previous_row = row  # Sauvegarder la ligne actuelle comme la précédente
+                    is_calibration = all(cell.replace('.', '', 1).isdigit() if cell else True for cell in row[1:])
+                    is_gain = any(key in row for key in ["ADC", "GAIN", "VALUE"])
+                    is_threshold = any(key in row for key in ["CAPA", "THRESHOLD"])
 
-                # Ajouter la dernière série (si elle existe)
-                if previous_row:  # Pour s'assurer que la dernière ligne de calibration est bien ajoutée
-                    current_series.insert(0, previous_row)
-                if current_series:
+                    if is_calibration and i < len(data) - 2:
+                        next_row = data[i + 1]
+                        next_next_row = data[i + 2]
+
+                        is_next_gain = any(key in next_row for key in ["ADC", "GAIN", "VALUE"])
+                        is_next_threshold = any(key in next_next_row for key in ["CAPA", "THRESHOLD"])
+
+                        if is_next_gain and is_next_threshold:
+                            # ✅ Fermer la série précédente avant d'en commencer une nouvelle
+                            if collecting and current_series:
+                                self.series_data.append(current_series)
+                                series_titles.append(self.extract_timestamp(current_series[0]))
+                            
+                            # ✅ Réinitialiser la série et collecter la calibration
+                            current_series = [row, next_row, next_next_row]
+                            collecting = True
+                            continue  
+
+                    if collecting:
+                        current_series.append(row)  
+
+                # ✅ Ajouter la dernière série détectée
+                if collecting and current_series:
                     self.series_data.append(current_series)
+                    series_titles.append(self.extract_timestamp(current_series[0]))
 
-                # Ajouter les séries détectées au menu déroulant
-                for i in range(len(self.series_data)):
-                    self.series_dropdown.addItem(f"Série {i+1}")
+                for i, title in enumerate(series_titles):
+                    self.series_dropdown.addItem(f"Série {i+1} : {title}")
 
-                # Charger par défaut "Fichier entier"
-                self.load_selected_series(0)  # Le fichier entier (index 0) est affiché par défaut
-
-                # Afficher l'intégralité du fichier dans la table
-                if data:
-                    self.tableWidget.setRowCount(len(data))
-                    self.tableWidget.setColumnCount(len(data[0]))
-
-                    for row_idx, row in enumerate(data):
-                        for col_idx, cell in enumerate(row):
-                            self.tableWidget.setItem(row_idx, col_idx, QTableWidgetItem(cell))
-
-                    # Ajuste la largeur des colonnes
-                    for col in range(self.tableWidget.columnCount()):
-                        self.tableWidget.setColumnWidth(col, 75)
-
-                    # Ajuste la première colonne à 150 pixels
-                    self.tableWidget.setColumnWidth(0, 150)
-
-                    # Permet d'étirer la dernière colonne pour un affichage optimal
-                    self.tableWidget.horizontalHeader().setStretchLastSection(True)
+                self.load_selected_series(0)
 
         except Exception as e:
             self.label.setText(f"🚨 Erreur : {e}")
+
+
+
+
+    def extract_timestamp(self, row):
+        """Extrait la date et l'heure du premier timestamp et les formate en 'JJ/MM HHhMM'."""
+        try:
+            timestamp = row[0]  # Le timestamp est dans la première colonne
+            dt = datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S,%f")  # Convertir en objet datetime
+            return dt.strftime("%d/%m %Hh%M")  # Format : 24/04 19h35
+        except Exception:
+            return "??/?? ??:??"  # Si problème, affiche un placeholder
+
+
+
+
 
         
         
 
     def load_selected_series(self, index):
-        """Affiche la série de données sélectionnée dans la table."""
+        """Affiche la série de données sélectionnée dans la table en utilisant les en-têtes globales."""
         if not self.series_data or index < 0 or index >= len(self.series_data):
             return
 
         series = self.series_data[index]
-        self.tableWidget.clear()
-        self.tableWidget.setRowCount(len(series))
-        self.tableWidget.setColumnCount(len(series[0]))
+        
+        if not series:
+            return
 
-        for row_idx, row in enumerate(series):
+        # Utiliser les en-têtes globales
+        headers = self.global_headers  
+        data_rows = series  # Garde toutes les lignes (pas d'en-têtes à retirer ici)
+
+        self.tableWidget.clear()
+        self.tableWidget.setRowCount(len(data_rows))
+        self.tableWidget.setColumnCount(len(headers))
+
+        self.tableWidget.setHorizontalHeaderLabels(headers)  
+
+        for row_idx, row in enumerate(data_rows):
             for col_idx, cell in enumerate(row):
                 self.tableWidget.setItem(row_idx, col_idx, QTableWidgetItem(cell))
 
-        self.tableWidget.setColumnWidth(0, 150)  # Ajuste la première colonne
+        self.tableWidget.setColumnWidth(0, 150)  
         self.tableWidget.horizontalHeader().setStretchLastSection(True)
+
 
