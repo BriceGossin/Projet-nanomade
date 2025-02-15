@@ -77,9 +77,9 @@ class SerialWidget(QWidget):
         self.validate_button.clicked.connect(self.send_calibration_values)
 
         # Ajout des widgets dans le layout horizontal
-        self.calibration_controls_layout.addWidget(QLabel("Gain:"))
+        self.calibration_controls_layout.addWidget(QLabel("Gain de force :"))
         self.calibration_controls_layout.addWidget(self.gain_dropdown)
-        self.calibration_controls_layout.addWidget(QLabel("Limite:"))
+        self.calibration_controls_layout.addWidget(QLabel("Limite de force :"))
         self.calibration_controls_layout.addWidget(self.limit_dropdown)
         self.calibration_controls_layout.addWidget(self.validate_button)
 

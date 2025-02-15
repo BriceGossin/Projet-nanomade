@@ -164,23 +164,18 @@ class MainWindow(QMainWindow):
             self.content_layout.addWidget(QLabel("⚠️ Fichier CSV introuvable !"))
 
     def launch_csv(self):
+        """Affiche l'interface CSVViewer dans l'application."""
         self.clear_content()  # Supprime le contenu précédent
 
-        # Supprimer output_display si il est déjà présent
-        for i in reversed(range(self.content_layout.count())):
-            widget = self.content_layout.itemAt(i).widget()
-            if widget == self.output_display:
-                widget.hide()  # Cache output_display
-                widget.lower()  # Le met en arrière-plan
-        
-        file_path = "sensor_responses.csv"  
+        # Cacher output_display si présent
+        if hasattr(self, "output_display") and self.output_display:
+            self.output_display.hide()
 
-        if os.path.exists(file_path):
-            self.csv_widget = CSVViewer(file_path)  # On utilise CSVViewer au lieu de MainWindow
-            self.content_layout.addWidget(self.csv_widget)  
-        else:
-            self.content_layout.addWidget(QLabel("⚠️ Fichier CSV introuvable !"))
-            
+        # Créer et afficher le widget CSVViewer
+        self.csv_widget = CSVViewer(self)
+        self.content_layout.addWidget(self.csv_widget)
+
+
             
     def launch_live_command(self):
             self.clear_content()  # Supprime le contenu précédent
