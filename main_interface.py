@@ -4,7 +4,7 @@ from PySide6.QtWidgets import *
 from PySide6.QtGui import QPalette, QColor
 from PySide6.QtCore import Qt, QSize, QPropertyAnimation, QProcess
 from rectangles import Rectangles  # Import direct au lieu d'utiliser subprocess
-from app import CSVViewer
+from csvviewer import CSVViewer
 from Code_commande import SerialWidget
 
 class MainWindow(QMainWindow):

@@ -32,7 +32,7 @@ class SerialWidget(QWidget):
         self.port_label.setFont(QFont("Arial", 10, QFont.Bold))
         
         self.port_dropdown = QComboBox()
-        self.port_dropdown.setFixedWidth(120)
+        self.port_dropdown.setFixedWidth(150)
         self.refresh_ports()
         self.port_dropdown.setStyleSheet("padding: 5px; font-size: 12px;")
         
