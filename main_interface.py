@@ -148,22 +148,15 @@ class MainWindow(QMainWindow):
 
     def launch_rectangle(self):
         self.clear_content()  # Supprime le contenu précédent
+        # Cacher output_display si présent
+        if hasattr(self, "output_display") and self.output_display:
+            self.output_display.hide()
 
-        # Supprimer output_display si il est déjà présent
-        for i in reversed(range(self.content_layout.count())):
-            widget = self.content_layout.itemAt(i).widget()
-            if widget == self.output_display:
-                widget.hide()  # Cache output_display
-                widget.lower()  # Le met en arrière-plan
-                
-        file_path = "sensor_responses.csv"  # Chemin vers le fichier CSV
+        # Créer et afficher le widget Rectangles sans fichier initial
+        self.rectangle_widget = Rectangles(self)  # Le parent est `self` (MainWindow)
+        self.content_layout.addWidget(self.rectangle_widget)
 
-        if os.path.exists(file_path):
-            self.rectangles_widget = Rectangles(file_path)  # Instancie la classe Rectangles
-            self.content_layout.addWidget(self.rectangles_widget)  # L'ajoute à la zone centrale
-        else:
-            self.content_layout.addWidget(QLabel("⚠️ Fichier CSV introuvable !"))
-
+        
     def launch_csv(self):
         """Affiche l'interface CSVViewer dans l'application."""
         self.clear_content()  # Supprime le contenu précédent
