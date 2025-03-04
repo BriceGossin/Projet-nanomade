@@ -1,6 +1,10 @@
 import sys
 import os
 import csv
+import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 from datetime import datetime
 from PySide6.QtWidgets import *
 from PySide6.QtCore import Qt
@@ -12,6 +16,7 @@ class CSVViewer(QWidget):
         self.setWindowTitle("Visualisation de CSV")
         self.setGeometry(100, 100, 800, 600)
 
+        self.show_graph = False  # Indique si l'affichage actuel est un graphe
         # Layout principal
         layout = QVBoxLayout()
 
@@ -84,12 +89,28 @@ class CSVViewer(QWidget):
         #self.series_dropdown.setToolTip("Sélectionnez une série de données dans le fichier CSV.")
         self.series_dropdown.currentIndexChanged.connect(self.load_selected_series)
         layout.addWidget(self.series_dropdown, alignment=Qt.AlignCenter)
+        
+        self.graph_or_csv_btn = QPushButton("Graphe")
+        self.graph_or_csv_btn.setFixedSize(120, 30)
+        self.graph_or_csv_btn.setStyleSheet(
+            "background-color: #6B5; color: white; font-weight: bold; border-radius: 5px; padding: 3px;"
+        )
+        self.graph_or_csv_btn.clicked.connect(self.toggle_graph_view)
+        layout.addWidget(self.graph_or_csv_btn, alignment=Qt.AlignCenter)
 
-        
-        
-        # Table pour afficher le contenu du CSV
         self.tableWidget = QTableWidget()
         layout.addWidget(self.tableWidget)
+
+        # 📊 Widget pour afficher le graphe
+        self.graphWidget = QWidget()
+        self.graphLayout = QVBoxLayout(self.graphWidget)
+        self.canvas = FigureCanvas(plt.figure())  # Création d'un canvas pour Matplotlib
+        self.graphLayout.addWidget(self.canvas)
+        
+        self.toolbar = NavigationToolbar(self.canvas, self)
+        
+        
+
 
         self.setLayout(layout)
 
@@ -235,5 +256,91 @@ class CSVViewer(QWidget):
 
         self.tableWidget.setColumnWidth(0, 150)  
         self.tableWidget.horizontalHeader().setStretchLastSection(True)
+        
+        
+    def plot_graph(self):
+        """Affiche un graphe de la série sélectionnée dans le widget de l'interface"""
+        if not hasattr(self, "current_file") or not self.current_file:
+            QMessageBox.warning(self, "Avertissement", "Aucun fichier CSV sélectionné.")
+            return
+
+        try:
+            df = pd.read_csv(self.current_file, on_bad_lines='skip')
+
+            if df.empty:
+                QMessageBox.warning(self, "Erreur", "Le fichier CSV est vide ou corrompu.")
+                return
+
+            if 'Timestamp' in df.columns:
+                df['Timestamp'] = pd.to_datetime(df['Timestamp'], format='%Y-%m-%d %H:%M:%S,%f', errors='coerce')
+                df = df.dropna()
+
+
+            colonnes_a_garder = []
+            for col in df.columns[1:17]:
+                premiere_valeur = df[col].iloc[0]
+                if premiere_valeur != 1000 and any(df[col] != 3299):
+                    colonnes_a_garder.append(col)
+                    
+            df_filtre = df[['Timestamp'] + colonnes_a_garder]
+            
+            #Supprimer les valeurs de calibration
+            index_fin_calibration = 0
+            if df.isna().any().any():  # Vérifie s'il y a des NaN
+                index_fin_calibration = df.dropna().index[0]  # Premier index non-NaN
+                df_filtre = df_filtre.iloc[index_fin_calibration:]
+
+
+            
+
+
+            # Effacer le graphique précédent
+            self.canvas.figure.clear()
+
+            # Tracer le nouveau graphique
+            ax = self.canvas.figure.add_subplot(111)
+            for col in colonnes_a_garder:
+                ax.plot(df_filtre['Timestamp'], df_filtre[col], label=col)
+
+            ax.set_xlabel("Temps")
+            ax.set_ylabel("Valeurs")
+            ax.set_title(f"Évolution des valeurs - {os.path.basename(self.current_file)}")
+            ax.legend()
+            ax.grid(True)
+            
+            
+            ax.set_ylim(1400, 2100)
+            ax.set_yticks(range(1400, 2100, 100))  # Affiche les valeurs de 1500 à 2000 avec un pas de 100
+            ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: int(x)))  # Force l'affichage des valeurs en y 
+
+            self.canvas.draw()  # Mettre à jour l'affichage
+
+        except Exception as e:
+            print(self, "Erreur", f"Une erreur est survenue : {e}")
+
+
+    def toggle_graph_view(self):
+        """Bascule entre l'affichage du tableau et du graphe."""
+        self.show_graph = not self.show_graph
+        if self.show_graph:
+            self.layout().replaceWidget(self.tableWidget, self.graphWidget)
+            self.tableWidget.hide()
+            self.graphWidget.show()
+            self.graph_or_csv_btn.setText("Tableau")
+            self.plot_graph()
+            
+            self.layout().addWidget(self.toolbar) #On ajoute la barre d'outils de matplotlib
+        else:
+            self.layout().replaceWidget(self.graphWidget, self.tableWidget)
+            self.graphWidget.hide()
+            self.tableWidget.show()
+            self.graph_or_csv_btn.setText("Graphe")
+            
+            self.layout().removeWidget(self.toolbar) #On l'enlève en mode tableau
+            #self.toolbar.deleteLater()
+
+            
+            
+
 
 

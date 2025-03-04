@@ -29,7 +29,9 @@ class MainWindow(QMainWindow):
         dark_palette.setColor(QPalette.Button, QColor(60, 60, 60))  # Boutons gris foncé
         #dark_palette.setColor(QPalette.ButtonText, QColor(255, 255, 255))  # Texte des boutons clair
         dark_palette.setColor(QPalette.Link, QColor(0, 162, 232))  # Liens en bleu clair
+        
         QApplication.setPalette(dark_palette)
+        
 
         # Widget principal
         self.central_widget = QWidget()
@@ -184,10 +186,10 @@ class MainWindow(QMainWindow):
             """Lance l'interface de communication série."""
             self.clear_content()  # Supprime le contenu précédent
 
-            # Création du widget série
-            self.serial_widget = SerialWidget()
-            self.content_layout.addWidget(self.serial_widget)  # L'ajoute à la zone centrale
-            
+            self.serial_widget = SerialWidget()  # ✅ Attribut de classe pour maintenir la référence
+            self.content_layout.addWidget(self.serial_widget)
+
+
 
     def reset_page(self):
         """Réinitialiser l'interface et revenir à l'état initial (accueil)."""

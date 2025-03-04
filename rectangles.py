@@ -261,6 +261,22 @@ class Rectangles(QWidget):
 
                 headers = rows[0][1:34]
                 base_values = rows[1][1:17]
+                # 🔄 Réorganisation des colonnes 5 à 9
+                # Ordre souhaité : 1, 2, 3, 4, 5, 9, 8, 7, 6, 10, 11, 12, 13, 14, 15, 16, 17
+
+                # 1. Conserver les colonnes 1 à 4
+                reorganized_values = base_values[:4]
+                reorganized_headers = headers[:4]
+                # 2. Inverser les colonnes 5 à 9
+                reorganized_values += base_values[4:8][::-1]
+                reorganized_headers += headers[4:8][::-1]
+                # 3. Ajouter le reste normalement
+                reorganized_values += base_values[8:]
+                reorganized_headers += headers[8:]
+                
+                base_values = reorganized_values
+                headers = reorganized_headers
+                
                 presence_rows = [list(map(int, row[17:34])) for row in rows[1:] if all(cell.isdigit() for cell in row[17:34])]
 
                 filtered_headers = []
@@ -276,12 +292,31 @@ class Rectangles(QWidget):
 
                 for row in rows[1:]:
                     try:
+                        # 🔹 Extraction des valeurs numériques et de présence
                         numeric_row = [int(row[i + 1]) for i in valid_indices]
                         presence_row = [int(row[i + 17]) for i in valid_indices]
-                        data_rows.append(numeric_row)
-                        filtered_presence_rows.append(presence_row)
+
+                        # 🔄 Réorganisation des colonnes 5 à 9
+                        # Ordre souhaité : 1, 2, 3, 4, 5, 9, 8, 7, 6, 10, ...
+                        # 1. Conserver les colonnes 1 à 4
+                        reorganized_numeric = numeric_row[:4]
+                        reorganized_presence = presence_row[:4]
+
+                        # 2. Inverser les colonnes 5 à 9
+                        reorganized_numeric += numeric_row[4:8][::-1]
+                        reorganized_presence += presence_row[4:8][::-1]
+
+                        # 3. Ajouter le reste normalement
+                        reorganized_numeric += numeric_row[8:]
+                        reorganized_presence += presence_row[8:]
+
+                        # 🔄 Ajout des lignes réorganisées aux listes
+                        data_rows.append(reorganized_numeric)
+                        filtered_presence_rows.append(reorganized_presence)
+
                     except ValueError:
                         continue
+
 
                 return filtered_headers, data_rows, filtered_presence_rows
         except Exception as e:
@@ -302,8 +337,10 @@ class Rectangles(QWidget):
         count = 0
 
         # Vérifier si les 8 capteurs matriciels sont présents
-        matrix_headers = [f"M_F_{i}" for i in range(1, 9)]
+        matrix_headers = [f"M_F_{i}" for i in range(1, 5)]+[f"M_F_{i}" for i in range(8, 4, -1)]
         has_matrix_sensors = all(sensor in self.headers for sensor in matrix_headers)
+        #print(self.headers)
+        #print(has_matrix_sensors)
 
         # Si 8 capteurs matriciels sont détectés, ajouter un fond gris
         if has_matrix_sensors:

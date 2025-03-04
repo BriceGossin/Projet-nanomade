@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import *
-from PySide6.QtGui import QFont, QColor, QBrush, QPen, QShortcut, QKeySequence
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QFont, QColor, QBrush, QPen, QShortcut, QKeySequence, QPalette
+from PySide6.QtCore import Qt, QTimer, QPointF
 import serial
 import serial.tools.list_ports
 import threading
@@ -207,12 +207,63 @@ class SerialWidget(QWidget):
         self.graphics_view.setScene(self.scene)
         self.layout.addWidget(self.graphics_view)
 
+        # 📉 Vecteurs invisibles par défaut
+        self.vectors_visible = False
+        self.vectors = []  # Liste pour stocker les références aux QGraphicsLineItem
+        self.vector_start = None  # Pour enregistrer le point de départ du vecteur
+        
+        
+        
         self.rect_items = []  # Stocke les rectangles
         self.create_rectangles()  # Crée les rectangles initiaux
 
         # Timer pour la mise à jour des rectangles en live
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self.update_rectangles)
+        
+       
+        # 🔴 Bouton Afficher/Cacher Vecteurs
+        self.toggle_vectors_button = QPushButton("Afficher/Cacher Vecteurs", self.graphics_view)
+        self.toggle_vectors_button.setFixedSize(160, 40)
+        self.toggle_vectors_button.setStyleSheet("""
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                border-radius: 10px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #1E88E5;
+            }
+        """)
+        self.toggle_vectors_button.move(
+            20,  # Positionné à gauche
+            self.graphics_view.height() - self.toggle_vectors_button.height() - 20
+        )
+        self.toggle_vectors_button.raise_()
+        self.toggle_vectors_button.clicked.connect(self.toggle_vectors)
+
+        # 🔄 Bouton Réinitialiser Vecteurs
+        self.reset_vectors_button = QPushButton("Réinitialiser Vecteurs", self.graphics_view)
+        self.reset_vectors_button.setFixedSize(160, 40)
+        self.reset_vectors_button.setStyleSheet("""
+            QPushButton {
+                background-color: #FF5722;
+                color: white;
+                border-radius: 10px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #E64A19;
+            }
+        """)
+        self.reset_vectors_button.move(
+            20,
+            self.graphics_view.height() - self.toggle_vectors_button.height() - self.reset_vectors_button.height() - 40
+        )
+        self.reset_vectors_button.raise_()
+        self.reset_vectors_button.clicked.connect(self.reset_vectors)
+
 
         # 🔲 Bouton plein écran en bas à droite
         self.fullscreen_button = QPushButton("🖵 Plein écran", self.graphics_view)
@@ -462,11 +513,19 @@ class SerialWidget(QWidget):
 
 
 
-    
     def create_rectangles(self):
-        """Crée des rectangles pour afficher les capteurs actifs avec les bons headers et valeurs."""
-        self.rect_items = []
-        self.scene.clear()
+        """Crée des rectangles pour afficher les capteurs actifs avec les bons headers et valeurs,
+        et trace des vecteurs entre eux en fonction des valeurs de présence, sans jamais les effacer."""
+
+        # ⚡ Initialisation une seule fois des rectangles, vecteurs et boutons
+        if not hasattr(self, 'rect_items'):
+            self.rect_items = []
+            self.vectors = []
+            self.vector_start = None
+
+            # 🎨 Création de la vue graphique
+            self.scene = QGraphicsScene()
+            self.view = QGraphicsView(self.scene)
 
         rect_width = 75
         rect_height = 150
@@ -476,81 +535,114 @@ class SerialWidget(QWidget):
         row_limit = 4
         count = 0
 
-        # 🔍 Vérification de la présence des capteurs MF1 à MF8
-        matrix_headers = [f"MF{i}" for i in range(1, 5)]+[f"MF{i}" for i in range(8, 4, -1)]
+        matrix_headers = [f"MF{i}" for i in range(1, 5)] + [f"MF{i}" for i in range(8, 4, -1)]
         has_matrix_sensors = all(header in self.headers for header in matrix_headers)
-        #print(f"🟠 Headers actuels : {self.headers}")
 
-        
-        #print(f"has matrix sensors : {has_matrix_sensors}")
-        
-        # 🟠 Si tous les capteurs MF1 à MF8 sont présents, on ajoute un fond gris
         if has_matrix_sensors:
             bg_width = (rect_width + spacing) * 4 + 50
             bg_height = (rect_height + spacing) * 2 + 50
             background_rect = QGraphicsRectItem(-20, 20, bg_width, bg_height)
             background_rect.setBrush(QBrush(QColor(180, 180, 180)))  # Fond gris clair
-            background_rect.setZValue(-1)  # Mettre le fond en arrière-plan
+            background_rect.setZValue(-1)
             self.scene.addItem(background_rect)
-            bg_bottom = 20 + bg_height  # Position du bas du fond gris
+            bg_bottom = 20 + bg_height
         else:
-            bg_bottom = 50  # Si pas de fond gris, on garde l'offset normal
+            bg_bottom = 50
+
+        existing_items = {header.toPlainText(): (rect, value_text, header) for rect, value_text, header in self.rect_items}
 
         for sensor_info in self.sensor_data:
             try:
-                key, value = sensor_info.split(": ")  # Extraction du header et de la valeur
-                value = int(value)  # Conversion en entier
+                key, value = sensor_info.split(": ")
+                value = int(value)
             except ValueError:
-                continue  # Si erreur, passer au capteur suivant
+                continue
 
             if count >= row_limit:
-                x_offset = 10  # Réinitialiser l'offset X
+                x_offset = 10
                 y_offset += rect_height + spacing
                 count = 0
-            
+
             if has_matrix_sensors and key not in matrix_headers:
                 y_offset = bg_bottom + 30
 
-            # 🔲 Création du rectangle pour chaque capteur
-            rect = QGraphicsRectItem(x_offset, y_offset, rect_width, rect_height)
-            rect.setBrush(QBrush(self.get_color(value)))  # Couleur basée sur la valeur
-
-            # 🔵 Ajout d'une bordure bleue si présence détectée
-            if key in self.sensor_presence and self.sensor_presence[key] == 1:
-                rect.setPen(QPen(QColor(0, 0, 255), 5))  # Bordure BLEUE de 5px d'épaisseur
-                rect.setZValue(1)  # Mettre en avant le rectangle
+            if key in existing_items:
+                rect, value_text, header_text = existing_items[key]
+                rect.setBrush(QBrush(self.get_color(value)))
+                value_text.setPlainText(f"{value}")
+                value_text.setPos(x_offset + rect_width / 4, y_offset + rect_height / 2)
+                header_text.setPos(x_offset - 15 + rect_width / 2, y_offset + rect_height / 4)
+                rect.setRect(x_offset, y_offset, rect_width, rect_height)
             else:
-                rect.setPen(QPen(Qt.GlobalColor.transparent))  # Pas de bordure
-            self.scene.addItem(rect)
-            
-            
-            # 🔠 Texte de la valeur dans le rectangle
-            value_text = QGraphicsTextItem(f"{value}")
-            value_text.setDefaultTextColor(Qt.GlobalColor.black)
-            value_text.setFont(QFont("Arial", 10))
-            value_text.setPos(x_offset + rect_width / 4, y_offset + rect_height / 2)
-            self.scene.addItem(value_text)
+                rect = QGraphicsRectItem(x_offset, y_offset, rect_width, rect_height)
+                rect.setBrush(QBrush(self.get_color(value)))
+                self.scene.addItem(rect)
 
-            # 🔖 En-tête sous le rectangle
-            header_text = QGraphicsTextItem(key)
-            header_text.setDefaultTextColor(Qt.GlobalColor.black)
-            header_text.setFont(QFont("Arial", 10, QFont.Bold))
-            header_text.setPos(x_offset - 15 + rect_width / 2, y_offset + rect_height / 4)
-            self.scene.addItem(header_text)
+                value_text = QGraphicsTextItem(f"{value}")
+                value_text.setDefaultTextColor(Qt.GlobalColor.black)
+                value_text.setFont(QFont("Arial", 10))
+                value_text.setPos(x_offset + rect_width / 4, y_offset + rect_height / 2)
+                self.scene.addItem(value_text)
 
-            self.rect_items.append((rect, value_text, header_text))
-            value_text.setZValue(2)  # Garder le texte visible
+                header_text = QGraphicsTextItem(key)
+                header_text.setDefaultTextColor(Qt.GlobalColor.black)
+                header_text.setFont(QFont("Arial", 10, QFont.Bold))
+                header_text.setPos(x_offset - 15 + rect_width / 2, y_offset + rect_height / 4)
+                self.scene.addItem(header_text)
+
+                self.rect_items.append((rect, value_text, header_text))
+
+            if key in self.sensor_presence and self.sensor_presence[key] == 1:
+                rect.setPen(QPen(QColor(0, 0, 255), 5))
+                rect.setZValue(1)
+
+                center_x = x_offset + rect_width / 2
+                center_y = y_offset + rect_height / 2
+                current_point = QPointF(center_x, center_y)
+
+                if self.vector_start:
+                    vector = QGraphicsLineItem(
+                        self.vector_start.x(), self.vector_start.y(),
+                        current_point.x(), current_point.y()
+                    )
+
+                    # 🟥 Par défaut, les vecteurs sont transparents
+                    transparent_pen = QPen(Qt.GlobalColor.transparent)
+                    transparent_pen.setWidth(3)
+                    vector.setPen(transparent_pen)
+                    vector.setZValue(3)
+
+                    self.vectors.append(vector)
+                    self.vector_start = None
+                else:
+                    self.vector_start = current_point
+            else:
+                rect.setPen(QPen(Qt.GlobalColor.transparent))
+
+            value_text.setZValue(2)
             header_text.setZValue(2)
 
-
-            # ➡️ Avancer la position
             x_offset += rect_width + spacing
             count += 1
 
-        # 🔄 Rafraîchir la scène après mise à jour
+        # 📌 Mise à jour de la visibilité des vecteurs
+        if self.vectors_visible:
+            for vector in self.vectors:
+                red_pen = QPen(QColor(255, 0, 0))  # 🔴 Rouge vif
+                red_pen.setWidth(3)
+                vector.setPen(red_pen)
+                if vector.scene() is None:  # Si le vecteur n'est pas déjà dans la scène
+                    self.scene.addItem(vector)
+        else:
+            for vector in self.vectors:
+                transparent_pen = QPen(Qt.GlobalColor.transparent)
+                transparent_pen.setWidth(3)
+                vector.setPen(transparent_pen)
+
         self.scene.update()
 
-        
+
+ 
 
 
 
@@ -635,32 +727,57 @@ class SerialWidget(QWidget):
             return 0
 
     def choose_save_location(self, state): 
-        """Ouvre une boîte de dialogue pour choisir l'emplacement et force le format CSV."""
+        """Ouvre une boîte de dialogue pour choisir l'emplacement en mode clair et force le format CSV."""
         
-        if state == True:  # Si la case est cochée
+        if state:  # Si la case est cochée
             options = QFileDialog.Options()
             options |= QFileDialog.DontUseNativeDialog
             
             # Nom de fichier par défaut avec extension CSV
             default_name = "enregistrement_" + datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + ".csv"
             
-            # Boîte de dialogue pour choisir l'emplacement du fichier
-            file_path, _ = QFileDialog.getSaveFileName(
-                self, 
-                "Choisir l'emplacement du fichier",
-                default_name,  # Propose un nom par défaut en CSV
-                "Fichiers CSV (*.csv);;Tous les fichiers (*)", 
-                options=options
-            )
+            # Création de la boîte de dialogue de sauvegarde
+            file_dialog = QFileDialog(self, 
+                                    "Choisir l'emplacement du fichier", 
+                                    default_name, 
+                                    "Fichiers CSV (*.csv);;Tous les fichiers (*)",
+                                    options=options)
+                                    
+            file_dialog.setAcceptMode(QFileDialog.AcceptSave)
             
-            if file_path:
-                # Vérification et ajout de l'extension .csv si l'utilisateur ne l'a pas ajoutée
-                if not file_path.endswith(".csv"):
-                    file_path += ".csv"
-                    
-                self.csv_file = file_path  # Mise à jour du chemin du fichier
-                self.output_display.append(f"📁 Fichier enregistré à : {self.csv_file}")
-                self.init_csv_file()
+            # 🍋 Applique la palette claire uniquement à cette boîte de dialogue
+            file_dialog.setPalette(self.get_light_palette())
+            
+            # Affichage de la boîte de dialogue
+            if file_dialog.exec_():
+                file_path = file_dialog.selectedFiles()[0]  # Récupère le chemin du fichier
+                
+                if file_path:
+                    # Vérification et ajout de l'extension .csv si l'utilisateur ne l'a pas ajoutée
+                    if not file_path.endswith(".csv"):
+                        file_path += ".csv"
+                        
+                    self.csv_file = file_path  # Mise à jour du chemin du fichier
+                    self.output_display.append(f"📁 Fichier enregistré à : {self.csv_file}")
+                    self.init_csv_file()
+
+                
+    def get_light_palette(self):
+        """Renvoie une palette claire pour les fenêtres contextuelles."""
+        light_palette = QPalette()
+        light_palette.setColor(QPalette.Window, QColor(240, 240, 240))
+        light_palette.setColor(QPalette.WindowText, QColor(0, 0, 0))
+        light_palette.setColor(QPalette.Base, QColor(255, 255, 255))
+        light_palette.setColor(QPalette.AlternateBase, QColor(230, 230, 230))
+        light_palette.setColor(QPalette.ToolTipBase, QColor(255, 255, 220))
+        light_palette.setColor(QPalette.ToolTipText, QColor(0, 0, 0))
+        light_palette.setColor(QPalette.Button, QColor(240, 240, 240))
+        light_palette.setColor(QPalette.ButtonText, QColor(0, 0, 0))
+        light_palette.setColor(QPalette.Text, QColor(0, 0, 0))
+        light_palette.setColor(QPalette.Highlight, QColor(0, 120, 215))
+        light_palette.setColor(QPalette.HighlightedText, QColor(255, 255, 255))
+        return light_palette
+
                 
                 
     def toggle_graphics_fullscreen(self):
@@ -717,6 +834,29 @@ class SerialWidget(QWidget):
         )
         QGraphicsView.resizeEvent(self.graphics_view, event)
         
+        
+        
+    def toggle_vectors(self):
+        # 🔄 Inversion de l'état de visibilité
+        self.vectors_visible = not self.vectors_visible
+
+        # 🔘 Mise à jour du texte du bouton
+        if self.vectors_visible:
+            self.toggle_vectors_button.setText("Cacher Vecteurs")
+        else:
+            self.toggle_vectors_button.setText("Afficher Vecteurs")
+
+        # 🔄 Mise à jour de la scène
+        self.scene.update()
+
+
+    def reset_vectors(self):
+        """Réinitialiser tous les vecteurs"""
+        for vector in self.vectors:
+            self.scene.removeItem(vector)
+        self.vectors.clear()
+        self.vector_start = None
+
         
     
 
