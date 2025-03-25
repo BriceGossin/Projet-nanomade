@@ -1,5 +1,7 @@
 Ce répertoire contient nos recherches dans le cadre du projet nanomade. Les instructions ci-après ont pour but de faciliter la prise en main des outils trouvables dans les différents dossiers. 
 
+Chaque dossier doit être ouvert individuellement. Dans le cas contraire certains liens et chemins d'accès ne fonctionneront pas, notamment pour le dossier de l'interface. 
+
 Dossier ANN : Ce dossier contient le script de base pour utiliser un réseau de neurones de type ANN afin de prédire une lettre (A, B, C ou H) à partir d'un fichier csv. Son exécution est simple et demande à l'utilisateur s'il souhaite entraîner ou tester le modèle. Ce script a besoin d'une base de données d'entraînement (dossier Lettres) constituée de fichiers issus soit de l'interface Qt, soit de l'outil de prise de données automatique (trouvable dans le dossier Outils). Les fichiers label_encoder.pkl, modele_lettres.keras, scaler.pkl et taille_max.pkl contiennent les caractéristiques que nous avons utilisées pour nos tests (modèle précis à 90%) et sont générées/mises à jour automatiquement par le script. 
 
 Dossier Interface Qt : Ce dossier contient les scripts de l'interface Qt. Le script principal est main_interface.py. Il est relié à chaque script secondaire et est chargé de leur exécution. Cet interface permet d'utiliser les capteurs en live et d'en enregister le contenu, et de visualiser ce contenu après l'acquisition, que ce soit sous la forme d'un replay ("Visualisation de données") ou d'un csv/graphe ("Visualisation de csv"). 

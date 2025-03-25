@@ -7,6 +7,7 @@ from PySide6.QtCore import Qt, QSize, QPropertyAnimation, QProcess
 from rectangles import Rectangles  # Import direct au lieu d'utiliser subprocess
 from csvviewer import CSVViewer
 from Code_commande import SerialWidget
+from accueil import Accueil
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -31,7 +32,6 @@ class MainWindow(QMainWindow):
         dark_palette.setColor(QPalette.Link, QColor(0, 162, 232))  # Liens en bleu clair
         
         QApplication.setPalette(dark_palette)
-        
 
         # Widget principal
         self.central_widget = QWidget()
@@ -66,7 +66,7 @@ class MainWindow(QMainWindow):
         self.btn_command= QPushButton ("Acquisition de données")
         self.btn_rectangle = QPushButton("Visualisation de données")
         self.btn_csv_viz = QPushButton("Visualisation de csv")
-        self.btn_settings = QPushButton("Paramètres")
+        
 
         # Style des boutons
         self.button_style = """
@@ -84,7 +84,7 @@ class MainWindow(QMainWindow):
         """
 
         # Appliquer le style aux boutons
-        for btn in [self.btn_home, self.btn_command, self.btn_rectangle, self.btn_csv_viz, self.btn_settings]:
+        for btn in [self.btn_home, self.btn_command, self.btn_rectangle, self.btn_csv_viz]:
             btn.setFixedHeight(40)
             btn.setStyleSheet(self.button_style)
             self.menu_layout.addWidget(btn)
@@ -99,6 +99,8 @@ class MainWindow(QMainWindow):
         self.content_area = QWidget()
         self.content_layout = QVBoxLayout(self.content_area)
         self.main_layout.addWidget(self.content_area)
+        
+        
 
         # Zone d'affichage des logs du programme
         self.output_display = QTextEdit()
@@ -128,6 +130,16 @@ class MainWindow(QMainWindow):
         self.process = QProcess()
         self.process.readyReadStandardOutput.connect(self.update_output)
         self.process.readyReadStandardError.connect(self.update_output)
+        
+        # Création de la page d'accueil après l'initialisation du layout
+        self.accueil_widget = Accueil()
+        self.reset_page()
+
+
+    def reset_page(self):
+        """Réinitialise l'interface et affiche l'accueil."""
+        self.clear_content()
+        self.content_layout.addWidget(self.accueil_widget)  # Afficher la page d'accueil
 
     def toggle_menu(self):
         menu_width = int(self.width() * 0.25)  # 25% de la largeur de la fenêtre
@@ -188,13 +200,6 @@ class MainWindow(QMainWindow):
 
             self.serial_widget = SerialWidget()  # ✅ Attribut de classe pour maintenir la référence
             self.content_layout.addWidget(self.serial_widget)
-
-
-
-    def reset_page(self):
-        """Réinitialiser l'interface et revenir à l'état initial (accueil)."""
-        self.clear_content()  # Supprimer tout le contenu précédent
-        self.content_layout.addWidget(self.output_display)  # Réafficher output_display
 
     def update_output(self):
         output = self.process.readAllStandardOutput().data().decode()
